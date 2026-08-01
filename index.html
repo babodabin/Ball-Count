@@ -26,7 +26,8 @@
   --sans:Pretendard,"Pretendard Variable","Apple SD Gothic Neo",-apple-system,
          BlinkMacSystemFont,"Segoe UI",Roboto,"Noto Sans KR",sans-serif;
 }
-*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+/* touch-action:manipulation — 더블탭 확대를 끈다. 핀치 확대는 그대로 남는다. */
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent;touch-action:manipulation}
 html{-webkit-text-size-adjust:100%;scroll-behavior:smooth}
 body{margin:0;background:var(--bg);color:var(--text);font-family:var(--sans);
   font-size:15px;line-height:1.45;overflow-x:hidden;
@@ -58,6 +59,10 @@ button,select{font:inherit;color:inherit}
   text-transform:uppercase;margin-bottom:10px;display:flex;align-items:center;gap:8px}
 .eyebrow::before{content:"";width:16px;height:2px;background:var(--cyan);flex:0 0 16px}
 .sub{color:var(--muted);font-size:11px;margin-top:8px;line-height:1.55}
+.legend{margin-top:11px;padding:10px 12px;border-radius:11px;background:var(--well2);
+  color:var(--muted);font-size:11px;line-height:1.65}
+.legend b{color:var(--text);font-weight:800}
+.legend em{font-style:normal;color:var(--amber);font-weight:700}
 
 /* ---- 컨트롤 ---- */
 .row{display:flex;align-items:center;gap:8px 14px;min-height:34px;flex-wrap:wrap}
@@ -245,7 +250,7 @@ nav button.on::after{content:"";position:absolute;top:0;left:22%;right:22%;heigh
     <div class="quick-grid">
       <div><span>많은 공</span><strong id="q-most">–</strong></div>
       <div><span>먹히는 공</span><strong id="q-best">–</strong></div>
-      <div><span>맞는 공</span><strong id="q-worst">–</strong></div>
+      <div><span>안 먹히는 공</span><strong id="q-worst">–</strong></div>
     </div>
   </aside>
 
@@ -268,6 +273,11 @@ nav button.on::after{content:"";position:absolute;top:0;left:22%;right:22%;heigh
         <div class="eyebrow">무엇이 먹히나</div>
         <div class="tw" id="res"></div>
         <div class="verdict" id="verdict"></div>
+        <div class="legend">
+          <b>CSW</b> = (루킹 + 헛스윙) ÷ 전체 투구. <em>높을수록 투수에게 유리</em>합니다.<br>
+          <b>루킹</b>은 전체 투구 대비, <b>헛스윙</b>은 <em>스윙 대비</em> 비율이라 두 열을 그냥 더해도 CSW가 되지 않습니다.<br>
+          회색으로 흐린 줄은 100구 미만이라 참고만 하세요.
+        </div>
       </div>
       <div class="panel">
         <div class="eyebrow">타자는</div>
@@ -305,6 +315,11 @@ nav button.on::after{content:"";position:absolute;top:0;left:22%;right:22%;heigh
     <div class="row"><span class="grp"><span class="rl">구종</span><span class="dots" id="prev"></span></span></div>
     <div class="row"><span class="grp"><span class="rl">결과</span><span class="dots seg" id="pg"></span></span></div>
     <div class="sub" id="seqhead"></div>
+    <div class="legend">
+      <b>읽는 법</b> — 방금 던진 공이 위에서 고른 구종이고 그 결과가 스트라이크(루킹·헛스윙·파울) 또는 볼이어서
+      <em>지금 카운트가 됐을 때</em>, 투수가 실제로 <b>그 다음에 던진 공</b>의 분포입니다.<br>
+      카운트는 <b>카운트 탭</b>에서 바꿉니다. 보정 없는 실측이라 표본이 작으면 그대로 흔들립니다.
+    </div>
   </div>
   <div class="cols">
     <div class="panel">
@@ -341,6 +356,9 @@ nav button.on::after{content:"";position:absolute;top:0;left:22%;right:22%;heigh
       <div class="panel">
         <div class="eyebrow">리그 전체</div>
         <div class="tw" id="alltab"></div>
+        <div class="legend">
+          <b>CSW</b> = (루킹 + 헛스윙) ÷ 전체 투구. 카운트·좌우 구분 없는 전체 합계입니다.
+        </div>
       </div>
     </div>
   </div>
@@ -359,7 +377,7 @@ const T={};["mix","zone","batter","result","loc","seq2","baseout","ph","inning",
 function q(n,f){const t=T[n];return t.rows.filter(r=>Object.entries(f).every(([k,v])=>r[t.c[k]]===v))
   .map(r=>{const o={};t.cols.forEach((k,i)=>o[k]=r[i]);return o;});}
 
-const S={b:3,s:2,o:0,p:"R",st:"R",ib:"*",b1:false,b2:false,b3:false,zone:null,pg:"S",
+const S={b:0,s:0,o:0,p:"R",st:"R",ib:"*",b1:false,b2:false,b3:false,zone:null,pg:"S",
          base:"none",outs2:0,ib2:"4-6",prev:"FF"};
 const $=id=>document.getElementById(id);
 const pct=v=>v==null?"–":Math.round(v);
@@ -389,9 +407,13 @@ function lampRow(el,n,on,cls,set){
 function baseKey(){ return (S.b2||S.b3)?"risp":(S.b1?"first":(S.b1||S.b2||S.b3?"x":"none")); }
 function baseAny(){ return S.b1||S.b2||S.b3; }
 
+/* 자료가 없을 때 44px 빈 띠가 남지 않게 접는다 */
+function hideBand(elB,elL){elB.innerHTML="";elB.style.display="none";elL.innerHTML="";}
+
 function band(elB,elL,rows,key){
   const tot=rows.reduce((a,r)=>a+r.n,0);
   const sorted=rows.slice().sort((a,b)=>b.n-a.n);
+  elB.style.display="flex";
   elB.innerHTML=sorted.map(r=>{
     const p=r.n/tot*100;
     return `<div class="bs" style="width:${p}%;background:${COL[r[key]]||"#888"}">
@@ -489,7 +511,7 @@ function render(){
     const t0=topMix[0],tt=topMix.reduce((a,r)=>a+r.n,0);
     $("q-most").textContent=`${KO[t0.pitch_type]} ${Math.round(t0.n/tt*100)}%`;
   } else {
-    $("band").innerHTML="";$("bleg").innerHTML="";$("src").textContent="표본 없음";
+    hideBand($("band"),$("bleg"));$("src").textContent="표본 없음";
     $("q-n").textContent="표본 없음";$("q-most").textContent="–";
   }
 
@@ -525,13 +547,18 @@ function render(){
   if(bo.length){band($("boband"),$("bobleg"),bo,"pitch_type");
     $("bonote").textContent=`${bo.reduce((a,r)=>a+r.n,0).toLocaleString()}구 · 실측`;
     resultTable($("bores"),bo,"pitch_type");}
-  else{$("boband").innerHTML="";$("bobleg").innerHTML="";$("bonote").textContent="표본 없음";$("bores").innerHTML="";}
+  else{hideBand($("boband"),$("bobleg"));$("bonote").textContent="표본 없음";
+    $("bores").innerHTML='<div class="sub">이 조합은 표본이 없습니다.</div>';}
 
   /* 시퀀스 */
   dots($("prev"),ORDER.map(p=>[p,KO[p]]),v=>S.prev===v,v=>S.prev=v,"wide ");
   dots($("pg"),[["S","스트라이크"],["B","볼"]],v=>S.pg===v,v=>S.pg=v,"wide ");
-  const sq=q("seq2",{cnt:cnt,pg:S.pg,prev:S.prev});
-  $("seqhead").textContent=`${cnt.replace("-","−")} 카운트 · 직전 ${KO[S.prev]} → ${S.pg==="S"?"스트라이크":"볼"}`;
+  /* 0−0은 직전 공이 없는 카운트라 시퀀스 자료가 존재하지 않는다 */
+  const seqNA=(cnt==="0-0");
+  const sq=seqNA?[]:q("seq2",{cnt:cnt,pg:S.pg,prev:S.prev});
+  $("seqhead").textContent=seqNA
+    ? "0−0은 타석의 첫 공이라 직전 공이 없습니다"
+    : `${cnt.replace("-","−")} 카운트 · 직전 ${KO[S.prev]} → ${S.pg==="S"?"스트라이크":"볼"}`;
   if(sq.length){
     band($("sqband"),$("sqbleg"),sq,"pitch");
     $("sqsrc").textContent=`${sq.reduce((a,r)=>a+r.n,0).toLocaleString()}구 · 실측`;
@@ -542,7 +569,15 @@ function render(){
           <td>${Math.round(r.n/tt*100)}</td><td>${r.mph==null?"–":Math.round(r.mph)}</td>
           <td>${pct(r.wh)}</td><td>${pct(r.csw)}</td><td>${ba3(r.ba)}</td></tr>`).join("");})()+
       `</tbody></table>`;
-  } else {$("sqband").innerHTML="";$("sqbleg").innerHTML="";$("sqsrc").textContent="표본 없음";$("seqtab").innerHTML="";}
+  } else {
+    hideBand($("sqband"),$("sqbleg"));
+    $("seqtab").innerHTML=`<div class="sub">${seqNA
+      ? "0−0에서는 표시할 다음 공이 없습니다."
+      : "이 조합은 표본이 없습니다. 직전 구종이나 결과를 바꿔보세요."}</div>`;
+    $("sqsrc").textContent=seqNA
+      ? "카운트 탭에서 볼이나 스트라이크를 하나 이상 올리면 자료가 나옵니다."
+      : "표본 없음";
+  }
 
   /* 기타 */
   const ph=q("ph",{}),gp=k=>ph.filter(r=>r.ph===k),sm=a=>a.reduce((x,r)=>x+r.n,0);
