@@ -1,0 +1,9 @@
+{
+  "name": "피치 리더",
+  "short_name": "피치 리더",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#f2f8f5",
+  "theme_color": "#f2f8f5",
+  "icons": [{ "src": "./app-icon.png", "sizes": "512x512", "type": "image/png" }]
+}
